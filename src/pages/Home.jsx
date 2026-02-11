@@ -205,17 +205,17 @@ const Home = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 w-full max-w-7xl mx-auto">
-      <div className="bg-gray-800 rounded-2xl shadow-2xl w-full flex overflow-hidden relative h-[600px]">
+    <div className="flex-1 flex flex-col items-center justify-center p-0 md:p-4 w-full max-w-7xl mx-auto h-[calc(100vh-64px)] md:h-auto">
+      <div className="bg-gray-900 md:bg-gray-800 md:rounded-2xl shadow-none md:shadow-2xl w-full flex overflow-hidden relative h-full md:h-[600px]">
 
         {/* Sidebar / Song List */}
-        <div className={`absolute inset-y-0 left-0 z-10 w-80 bg-gray-900 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col border-r border-gray-700`}>
-          <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900 sticky top-0">
+        <div className={`absolute inset-y-0 left-0 z-20 w-full md:w-80 bg-gray-900 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col border-r border-gray-700`}>
+          <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900 sticky top-0 z-10">
             <h2 className="text-xl font-bold flex items-center gap-2 text-white">
               <Music className="w-6 h-6 text-purple-500" />
               Playlist
             </h2>
-            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-gray-400 hover:text-white">
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:text-white rounded-full hover:bg-gray-800">
               ✕
             </button>
           </div>
@@ -291,75 +291,102 @@ const Home = () => {
         </div>
 
         {/* Main Player Area */}
-        <div className="flex-1 p-8 flex flex-col items-center justify-center relative bg-gradient-to-br from-gray-800 to-gray-900 min-w-0">
+        <div className="flex-1 p-6 md:p-8 flex flex-col items-center justify-center relative bg-gradient-to-br from-gray-900 via-gray-800 to-black min-w-0 h-full">
+
+          {/* Mobile Header / Menu Button */}
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center md:hidden z-10">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
+            >
+              <List className="w-6 h-6" />
+            </button>
+            <span className="text-sm font-medium text-gray-400">Now Playing</span>
+            <div className="w-10"></div> {/* Spacer for center alignment */}
+          </div>
+
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-4 left-4 p-2 md:hidden text-gray-400 hover:text-white"
+            className="absolute top-4 left-4 p-2 hidden md:block text-gray-400 hover:text-white transition-colors"
           >
             <List className="w-6 h-6" />
           </button>
 
           {currentSong ? (
-            <>
-              <div className="w-64 h-64 mb-8 relative group shrink-0">
+            <div className="flex flex-col items-center w-full max-w-lg animate-in fade-in duration-500">
+              {/* Album Art */}
+              <div className="w-48 h-48 md:w-72 md:h-72 mb-8 relative group shrink-0">
+                <div className={`absolute inset-0 bg-purple-500 rounded-2xl blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 ${isPlaying ? 'animate-pulse' : ''}`}></div>
                 <img
                   src={currentSong.cover}
                   alt={currentSong.title}
-                  className={`w-full h-full object-cover rounded-2xl shadow-lg transition-transform duration-500 ${isPlaying ? 'scale-105' : 'scale-100'}`}
+                  className={`relative w-full h-full object-cover rounded-2xl shadow-2xl transition-transform duration-700 ease-out ${isPlaying ? 'scale-105' : 'scale-100'}`}
                 />
-                <div className={`absolute inset-0 bg-black/20 rounded-2xl ${isPlaying ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}></div>
               </div>
 
+              {/* Song Info */}
               <div className="text-center mb-8 w-full">
-                <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white truncate px-4">{currentSong.title}</h1>
+                <h1 className="text-2xl md:text-3xl font-bold mb-2 text-white truncate px-4 drop-shadow-lg">{currentSong.title}</h1>
                 <p className="text-gray-400 text-lg truncate px-4">{currentSong.artist}</p>
               </div>
 
-              <div className="w-full max-w-md mb-8 px-4">
-                <div className="flex justify-between text-xs text-gray-400 mb-2">
+              {/* Progress Bar */}
+              <div className="w-full mb-8 px-4">
+                <div className="flex justify-between text-xs text-gray-400 mb-2 font-medium">
                   <span>{formatTime(progress)}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  value={progress}
-                  onChange={handleProgressChange}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400"
-                />
+                <div className="relative w-full h-2 bg-gray-700 rounded-full cursor-pointer group">
+                  <div
+                    className="absolute top-0 left-0 h-full bg-purple-600 rounded-full group-hover:bg-purple-500 transition-colors"
+                    style={{ width: `${(progress / duration) * 100}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    value={progress}
+                    onChange={handleProgressChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center gap-6 md:gap-8">
+              {/* Controls */}
+              <div className="flex items-center justify-between w-full max-w-xs md:max-w-sm px-4">
                 <button
                   onClick={() => setIsShuffle(!isShuffle)}
-                  className={`text-gray-400 hover:text-white transition-colors ${isShuffle ? 'text-purple-500 hover:text-purple-400' : ''}`}
+                  className={`p-2 rounded-full transition-all ${isShuffle ? 'text-purple-500 bg-purple-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                   title="Shuffle"
                 >
-                  <Shuffle className="w-6 h-6" />
+                  <Shuffle className="w-5 h-5 md:w-6 md:h-6" />
                 </button>
 
-                <button onClick={prevSong} className="text-gray-400 hover:text-white transition-colors">
-                  <SkipBack className="w-8 h-8" />
+                <button onClick={prevSong} className="p-2 text-white hover:text-purple-400 transition-colors transform hover:-translate-x-1">
+                  <SkipBack className="w-8 h-8 md:w-9 md:h-9" />
                 </button>
+
                 <button
                   onClick={togglePlay}
-                  className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-purple-500 hover:scale-105 transition-all"
+                  className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-purple-600 to-purple-700 rounded-full flex items-center justify-center text-white shadow-xl shadow-purple-600/30 hover:scale-110 hover:shadow-purple-600/50 transition-all duration-300"
                 >
-                  {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
+                  {isPlaying ? <Pause className="w-8 h-8 md:w-10 md:h-10 fill-current" /> : <Play className="w-8 h-8 md:w-10 md:h-10 ml-1 fill-current" />}
                 </button>
-                <button onClick={nextSong} className="text-gray-400 hover:text-white transition-colors">
-                  <SkipForward className="w-8 h-8" />
+
+                <button onClick={nextSong} className="p-2 text-white hover:text-purple-400 transition-colors transform hover:translate-x-1">
+                  <SkipForward className="w-8 h-8 md:w-9 md:h-9" />
                 </button>
 
                 <button
                   onClick={() => setRepeatMode((prev) => (prev + 1) % 3)}
-                  className={`text-gray-400 hover:text-white transition-colors ${repeatMode > 0 ? 'text-purple-500 hover:text-purple-400' : ''} relative`}
+                  className={`p-2 rounded-full transition-all relative ${repeatMode > 0 ? 'text-purple-500 bg-purple-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                   title="Repeat"
                 >
-                  <Repeat className="w-6 h-6" />
+                  <Repeat className="w-5 h-5 md:w-6 md:h-6" />
                   {repeatMode === 2 && (
-                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-purple-500 text-white rounded-full w-4 h-4 flex items-center justify-center">1</span>
+                    <span className="absolute top-1 right-1 text-[8px] font-bold bg-purple-500 text-white rounded-full w-3 h-3 flex items-center justify-center">1</span>
                   )}
                 </button>
               </div>
@@ -372,11 +399,20 @@ const Home = () => {
                 onEnded={nextSong}
                 onError={(e) => console.error("Audio playback error:", e)}
               />
-            </>
+            </div>
           ) : (
-            <div className="text-center text-gray-500">
-              <Music className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>Select a song to play</p>
+            <div className="text-center text-gray-500 flex flex-col items-center animate-pulse">
+              <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6">
+                <Music className="w-10 h-10 opacity-50" />
+              </div>
+              <p className="text-lg font-medium mb-2">No Song Selected</p>
+              <p className="text-sm opacity-60">Choose a song from the playlist to start listening</p>
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="mt-6 px-6 py-2 bg-purple-600/20 text-purple-400 rounded-full hover:bg-purple-600/30 transition-colors md:hidden"
+              >
+                Open Playlist
+              </button>
             </div>
           )}
         </div>
