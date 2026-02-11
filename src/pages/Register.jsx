@@ -7,6 +7,8 @@ const Register = () => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
 
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {

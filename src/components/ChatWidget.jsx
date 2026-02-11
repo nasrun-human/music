@@ -11,19 +11,20 @@ const ChatWidget = () => {
   const socketRef = useRef();
   const messagesEndRef = useRef(null);
 
+  const SOCKET_URL = import.meta.env.PROD ? '/' : 'http://localhost:3000';
+
   useEffect(() => {
     if (user && isOpen) {
-      socketRef.current = io('http://localhost:3000');
-      
+      socketRef.current = io(SOCKET_URL);
       socketRef.current.emit('join_chat', { username: user.username, id: user.id });
 
       // Load initial messages (optional, if we added an API for it)
       fetch('http://localhost:3000/api/messages', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       })
-      .then(res => res.json())
-      .then(data => setMessages(data))
-      .catch(err => console.error(err));
+        .then(res => res.json())
+        .then(data => setMessages(data))
+        .catch(err => console.error(err));
 
       socketRef.current.on('receive_message', (message) => {
         setMessages((prev) => [...prev, message]);
@@ -54,7 +55,7 @@ const ChatWidget = () => {
         content: input,
         created_at: new Date().toISOString()
       };
-      
+
       socketRef.current.emit('send_message', messageData);
       // Optimistic update not needed as we get receive_message back, but good for latency
       // setMessages((prev) => [...prev, messageData]); 
@@ -67,7 +68,7 @@ const ChatWidget = () => {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {!isOpen && (
-        <button 
+        <button
           onClick={() => setIsOpen(true)}
           className="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-110"
         >
@@ -85,7 +86,7 @@ const ChatWidget = () => {
               <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-800/50">
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex gap-2 ${msg.username === user.username ? 'flex-row-reverse' : ''}`}>

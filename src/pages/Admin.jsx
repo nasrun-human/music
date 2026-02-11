@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
+// API base URL
+const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+
 const Admin = () => {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
@@ -8,15 +11,15 @@ const Admin = () => {
 
   useEffect(() => {
     if (user?.role === 'admin') {
-      fetch('http://localhost:3000/api/users', {
+      fetch(`${API_URL}/users`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       })
-      .then(res => res.json())
-      .then(data => setUsers(data));
+        .then(res => res.json())
+        .then(data => setUsers(data));
 
-      fetch('http://localhost:3000/api/songs')
-      .then(res => res.json())
-      .then(data => setSongs(data));
+      fetch(`${API_URL}/songs`)
+        .then(res => res.json())
+        .then(data => setSongs(data));
     }
   }, [user]);
 
@@ -27,11 +30,11 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <h1 className="text-3xl font-bold mb-8 text-purple-500">Admin Dashboard</h1>
-      
+
       <div className="grid md:grid-cols-2 gap-8">
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
           <h2 className="text-xl font-bold mb-4 flex justify-between">
-            Users 
+            Users
             <span className="bg-purple-600 px-2 py-1 rounded text-sm">{users.length}</span>
           </h2>
           <div className="space-y-3 max-h-96 overflow-y-auto">

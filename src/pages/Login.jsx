@@ -9,6 +9,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [error, setError] = useState('');
 
+  const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -19,7 +21,7 @@ const Login = () => {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      
+
       login(data.user, data.token);
       navigate('/');
     } catch (err) {

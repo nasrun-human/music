@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 // API base URL
-const API_URL = 'http://localhost:3000/api';
+// Use relative path in production (or when served by backend), otherwise localhost:3000
+const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
 
 const Home = () => {
   const [songs, setSongs] = useState([]);

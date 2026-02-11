@@ -312,7 +312,8 @@ io.on('connection', (socket) => {
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
 if (isProduction) {
-  app.get('*', (req, res) => {
+  // Use regex or different syntax for catchall in Express 5+ / path-to-regexp
+  app.get(/(.*)/, (req, res) => {
     // Check if request is for API
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return res.status(404).json({ error: 'Not Found' });
