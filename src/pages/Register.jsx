@@ -7,12 +7,12 @@ const Register = () => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
 
-    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    const API_URL = '/api';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:3000/api/register', {
+            const response = await fetch(`${API_URL}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),

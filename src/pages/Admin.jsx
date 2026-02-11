@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 // API base URL
-const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+const API_URL = '/api';
 
 const Admin = () => {
   const { user } = useAuth();

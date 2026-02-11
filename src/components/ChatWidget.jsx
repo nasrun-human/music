@@ -11,7 +11,7 @@ const ChatWidget = () => {
   const socketRef = useRef();
   const messagesEndRef = useRef(null);
 
-  const SOCKET_URL = import.meta.env.PROD ? '/' : 'http://localhost:3000';
+  const SOCKET_URL = '/';
 
   useEffect(() => {
     if (user && isOpen) {
