@@ -40,7 +40,7 @@ if (!fs.existsSync(uploadDir)) {
 
 // Middleware
 app.use(cors({
-  origin: isProduction ? false : "http://localhost:5173" // Disable CORS in prod if serving from same origin
+  origin: "*" // Allow all origins for now to fix connection issues
 }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
