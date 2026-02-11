@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, List, Upload, Plus } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, List, Upload, Plus, Shuffle, Repeat, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,18 +8,31 @@ const API_URL = 'http://localhost:3000/api';
 
 const Home = () => {
   const [songs, setSongs] = useState([]);
+  const [filteredSongs, setFilteredSongs] = useState([]);
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState(0); // 0: off, 1: all, 2: one
 
   const audioRef = useRef(null);
   const fileInputRef = useRef(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Use filteredSongs if search is active, otherwise use all songs for playlist display
+  // But for playback logic (next/prev), we usually stick to the current list or the full list
+  // Let's use the full list for playback but just filter the sidebar view for now
+  // OR better: if searching, playing next should play from filtered list?
+  // Standard behavior: Sidebar shows filtered, but Next/Prev follows the context.
+  // To keep it simple: Next/Prev follows the visible list if playing from it.
+
+  // Let's define the "active playlist" as the source of truth
+  const displaySongs = searchQuery ? filteredSongs : songs;
   const currentSong = songs[currentSongIndex];
 
   // Fetch songs from API
@@ -27,12 +40,25 @@ const Home = () => {
     fetchSongs();
   }, []);
 
+  useEffect(() => {
+    if (searchQuery) {
+      const filtered = songs.filter(song =>
+        song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredSongs(filtered);
+    } else {
+      setFilteredSongs(songs);
+    }
+  }, [searchQuery, songs]);
+
   const fetchSongs = async () => {
     try {
       const response = await fetch(`${API_URL}/songs`);
       if (!response.ok) throw new Error('Failed to fetch songs');
       const data = await response.json();
       setSongs(data);
+      setFilteredSongs(data);
       setIsLoading(false);
     } catch (error) {
       console.error('Error fetching songs:', error);
@@ -58,14 +84,56 @@ const Home = () => {
     setIsPlaying(!isPlaying);
   };
 
+  const getNextIndex = () => {
+    if (repeatMode === 2) { // Repeat One
+      return currentSongIndex;
+    }
+
+    if (isShuffle) {
+      let nextIndex = Math.floor(Math.random() * songs.length);
+      while (nextIndex === currentSongIndex && songs.length > 1) {
+        nextIndex = Math.floor(Math.random() * songs.length);
+      }
+      return nextIndex;
+    }
+
+    // Normal or Repeat All
+    const nextIndex = (currentSongIndex + 1) % songs.length;
+
+    // If Repeat Off and we reached the end, stop
+    if (repeatMode === 0 && currentSongIndex === songs.length - 1) {
+      return -1;
+    }
+
+    return nextIndex;
+  };
+
   const nextSong = () => {
-    setCurrentSongIndex((prev) => (prev + 1) % songs.length);
-    setProgress(0);
-    setIsPlaying(true);
+    const index = getNextIndex();
+    if (index !== -1) {
+      setCurrentSongIndex(index);
+      setProgress(0);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+      setProgress(0);
+    }
   };
 
   const prevSong = () => {
-    setCurrentSongIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    // If more than 3 seconds in, restart song
+    if (audioRef.current && audioRef.current.currentTime > 3) {
+      audioRef.current.currentTime = 0;
+      return;
+    }
+
+    if (isShuffle) {
+      // Ideally we should have a history stack, but random is fine for simple shuffle
+      let prevIndex = Math.floor(Math.random() * songs.length);
+      setCurrentSongIndex(prevIndex);
+    } else {
+      setCurrentSongIndex((prev) => (prev - 1 + songs.length) % songs.length);
+    }
     setProgress(0);
     setIsPlaying(true);
   };
@@ -151,7 +219,18 @@ const Home = () => {
             </button>
           </div>
 
-          <div className="p-4 border-b border-gray-700">
+          <div className="p-4 border-b border-gray-700 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search songs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-gray-800 text-white pl-10 pr-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
             <input
               type="file"
               ref={fileInputRef}
@@ -162,9 +241,9 @@ const Home = () => {
             />
             <button
               onClick={() => user ? fileInputRef.current.click() : navigate('/login')}
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
               Upload Songs
             </button>
           </div>
@@ -172,36 +251,40 @@ const Home = () => {
           <div className="overflow-y-auto flex-1">
             {isLoading ? (
               <div className="p-8 text-center text-gray-500">Loading songs...</div>
-            ) : songs.length === 0 ? (
+            ) : displaySongs.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
-                <p>No songs available</p>
-                <p className="text-sm mt-2">Upload some music to start listening</p>
+                <p>No songs found</p>
+                {searchQuery && <p className="text-sm mt-2">Try a different search term</p>}
               </div>
             ) : (
-              songs.map((song, index) => (
-                <div
-                  key={song.id}
-                  onClick={() => {
-                    setCurrentSongIndex(index);
-                    setIsPlaying(true);
-                    if (window.innerWidth < 768) setIsSidebarOpen(false);
-                  }}
-                  className={`p-4 cursor-pointer hover:bg-gray-800 transition-colors flex items-center gap-3 border-b border-gray-800/50 ${currentSongIndex === index ? 'bg-gray-800 border-l-4 border-l-purple-500' : ''}`}
-                >
-                  <img src={song.cover} alt={song.title} className="w-12 h-12 rounded object-cover" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className={`font-medium truncate ${currentSongIndex === index ? 'text-purple-400' : 'text-gray-200'}`}>{song.title}</h3>
-                    <p className="text-xs text-gray-400 truncate">{song.artist}</p>
-                  </div>
-                  {currentSongIndex === index && isPlaying && (
-                    <div className="flex gap-1 items-end h-4">
-                      <span className="w-1 h-2 bg-purple-500 animate-pulse"></span>
-                      <span className="w-1 h-4 bg-purple-500 animate-pulse delay-75"></span>
-                      <span className="w-1 h-3 bg-purple-500 animate-pulse delay-150"></span>
+              displaySongs.map((song) => {
+                // Find original index for click handler
+                const originalIndex = songs.findIndex(s => s.id === song.id);
+                return (
+                  <div
+                    key={song.id}
+                    onClick={() => {
+                      setCurrentSongIndex(originalIndex);
+                      setIsPlaying(true);
+                      if (window.innerWidth < 768) setIsSidebarOpen(false);
+                    }}
+                    className={`p-4 cursor-pointer hover:bg-gray-800 transition-colors flex items-center gap-3 border-b border-gray-800/50 ${currentSongIndex === originalIndex ? 'bg-gray-800 border-l-4 border-l-purple-500' : ''}`}
+                  >
+                    <img src={song.cover} alt={song.title} className="w-10 h-10 rounded object-cover" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-medium truncate text-sm ${currentSongIndex === originalIndex ? 'text-purple-400' : 'text-gray-200'}`}>{song.title}</h3>
+                      <p className="text-xs text-gray-400 truncate">{song.artist}</p>
                     </div>
-                  )}
-                </div>
-              ))
+                    {currentSongIndex === originalIndex && isPlaying && (
+                      <div className="flex gap-1 items-end h-3">
+                        <span className="w-0.5 h-2 bg-purple-500 animate-pulse"></span>
+                        <span className="w-0.5 h-3 bg-purple-500 animate-pulse delay-75"></span>
+                        <span className="w-0.5 h-2 bg-purple-500 animate-pulse delay-150"></span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -247,6 +330,14 @@ const Home = () => {
               </div>
 
               <div className="flex items-center gap-6 md:gap-8">
+                <button
+                  onClick={() => setIsShuffle(!isShuffle)}
+                  className={`text-gray-400 hover:text-white transition-colors ${isShuffle ? 'text-purple-500 hover:text-purple-400' : ''}`}
+                  title="Shuffle"
+                >
+                  <Shuffle className="w-6 h-6" />
+                </button>
+
                 <button onClick={prevSong} className="text-gray-400 hover:text-white transition-colors">
                   <SkipBack className="w-8 h-8" />
                 </button>
@@ -258,6 +349,17 @@ const Home = () => {
                 </button>
                 <button onClick={nextSong} className="text-gray-400 hover:text-white transition-colors">
                   <SkipForward className="w-8 h-8" />
+                </button>
+
+                <button
+                  onClick={() => setRepeatMode((prev) => (prev + 1) % 3)}
+                  className={`text-gray-400 hover:text-white transition-colors ${repeatMode > 0 ? 'text-purple-500 hover:text-purple-400' : ''} relative`}
+                  title="Repeat"
+                >
+                  <Repeat className="w-6 h-6" />
+                  {repeatMode === 2 && (
+                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-purple-500 text-white rounded-full w-4 h-4 flex items-center justify-center">1</span>
+                  )}
                 </button>
               </div>
 

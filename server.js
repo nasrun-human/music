@@ -16,15 +16,21 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
+
+// In production, we don't need CORS for the same domain, or we set it to the domain
+// For development, we allow localhost:5173
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = isProduction ? [] : ["http://localhost:5173"];
+
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: isProduction ? "*" : "http://localhost:5173", // Allow all in prod for simplicity or specific domain
     methods: ["GET", "POST"]
   }
 });
 
-const PORT = 3000;
-const SECRET_KEY = 'your-secret-key-change-it-in-production';
+const PORT = process.env.PORT || 3000;
+const SECRET_KEY = process.env.SECRET_KEY || 'your-secret-key-change-it-in-production';
 
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, 'uploads');
@@ -33,9 +39,16 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: isProduction ? false : "http://localhost:5173" // Disable CORS in prod if serving from same origin
+}));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Serve static files from the React app build directory
+if (isProduction) {
+  app.use(express.static(path.join(__dirname, 'dist')));
+}
 
 // Database setup
 let db;
@@ -295,6 +308,18 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+if (isProduction) {
+  app.get('*', (req, res) => {
+    // Check if request is for API
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return res.status(404).json({ error: 'Not Found' });
+    }
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
+}
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
