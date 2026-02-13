@@ -182,8 +182,16 @@ const Home = () => {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Upload failed');
+          let errorMessage = 'Upload failed';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch (e) {
+            console.error('Error parsing error response:', e);
+            // Fallback to status text if JSON parse fails
+            errorMessage = `Upload failed (${response.status} ${response.statusText})`;
+          }
+          throw new Error(errorMessage);
         }
 
         const newSong = await response.json();
