@@ -181,14 +181,17 @@ const Home = () => {
           body: formData,
         });
 
-        if (!response.ok) throw new Error('Upload failed');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Upload failed');
+        }
 
         const newSong = await response.json();
         setSongs(prev => [newSong, ...prev]);
 
       } catch (error) {
         console.error('Error uploading file:', error);
-        alert(`Failed to upload ${file.name}`);
+        alert(`Failed to upload ${file.name}: ${error.message}`);
       }
     }
 
@@ -237,7 +240,7 @@ const Home = () => {
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="audio/*"
+              accept="audio/*,video/mp4,video/x-m4v"
               multiple
             />
             <button

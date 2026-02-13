@@ -161,12 +161,13 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     let ext = path.extname(file.originalname);
-    if (!ext && file.mimetype.startsWith('audio/')) {
+    if ((!ext || ext === '') && (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/'))) {
       // Basic extension mapping
       switch (file.mimetype) {
         case 'audio/mpeg': ext = '.mp3'; break;
         case 'audio/wav': ext = '.wav'; break;
         case 'audio/ogg': ext = '.ogg'; break;
+        case 'video/mp4': ext = '.mp4'; break;
         default: ext = '.mp3'; // Default to mp3 if unknown
       }
     }
@@ -174,7 +175,12 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 100 * 1024 * 1024 // 100 MB limit
+  }
+});
 
 // --- Routes ---
 
@@ -245,7 +251,19 @@ app.get('/api/songs', async (req, res) => {
   }
 });
 
-app.post('/api/songs', authenticateToken, upload.single('audio'), async (req, res) => {
+app.post('/api/songs', authenticateToken, (req, res, next) => {
+  upload.single('audio')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      // A Multer error occurred when uploading.
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      // An unknown error occurred when uploading.
+      return res.status(500).json({ error: `Unknown upload error: ${err.message}` });
+    }
+    // Everything went fine.
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file uploaded' });
