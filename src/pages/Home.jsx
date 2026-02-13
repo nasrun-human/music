@@ -139,11 +139,13 @@ const Home = () => {
     setIsPlaying(true);
   };
 
-  const onTimeUpdate = (e) => {
-    const current = e.target.currentTime;
-    const duration = e.target.duration;
-    setProgress(current);
-    setDuration(duration);
+  const onTimeUpdate = () => {
+    if (audioRef.current) {
+      const current = audioRef.current.currentTime;
+      const duration = audioRef.current.duration;
+      setProgress(current);
+      if (duration) setDuration(duration);
+    }
   };
 
   const onLoadedMetadata = (e) => {
@@ -152,7 +154,9 @@ const Home = () => {
 
   const handleProgressChange = (e) => {
     const newTime = Number(e.target.value);
-    audioRef.current.currentTime = newTime;
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
     setProgress(newTime);
   };
 
