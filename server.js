@@ -160,7 +160,17 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    let ext = path.extname(file.originalname);
+    if (!ext && file.mimetype.startsWith('audio/')) {
+      // Basic extension mapping
+      switch (file.mimetype) {
+        case 'audio/mpeg': ext = '.mp3'; break;
+        case 'audio/wav': ext = '.wav'; break;
+        case 'audio/ogg': ext = '.ogg'; break;
+        default: ext = '.mp3'; // Default to mp3 if unknown
+      }
+    }
+    cb(null, uniqueSuffix + ext);
   }
 });
 
@@ -227,7 +237,7 @@ app.get('/api/songs', async (req, res) => {
     const songs = await db.all('SELECT * FROM songs ORDER BY created_at DESC');
     const songsWithFullUrl = songs.map(song => ({
       ...song,
-      url: song.url.startsWith('http') ? song.url : `http://localhost:${PORT}/uploads/${song.url}`
+      url: song.url.startsWith('http') ? song.url : `/uploads/${song.url}`
     }));
     res.json(songsWithFullUrl);
   } catch (error) {
@@ -257,7 +267,7 @@ app.post('/api/songs', authenticateToken, upload.single('audio'), async (req, re
 
     res.json({
       ...newSong,
-      url: `http://localhost:${PORT}/uploads/${newSong.url}`
+      url: `/uploads/${newSong.url}`
     });
 
   } catch (error) {
