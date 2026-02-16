@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -7,14 +6,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Supabase Setup
+const supabaseUrl = 'https://vfsqbtxvosdbncolnbko.supabase.co';
+const supabaseKey = 'sb_publishable_mMWZNi6FrjyRMwxrewiC4Q_5KCEEdqf'; // WARNING: Check if this key works.
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 async function importSongs() {
   console.log('Starting song import...');
-
-  // Database setup
-  const db = await open({
-    filename: path.join(__dirname, 'database.sqlite'),
-    driver: sqlite3.Database
-  });
 
   const uploadDir = path.join(__dirname, 'uploads');
   if (!fs.existsSync(uploadDir)) {
@@ -32,22 +30,37 @@ async function importSongs() {
     const ext = path.extname(file).toLowerCase();
     if (audioExtensions.includes(ext)) {
       // Check if song already exists
-      const existing = await db.get('SELECT * FROM songs WHERE url = ?', file);
+      const { data: existing, error: fetchError } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('url', file)
+        .single();
       
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "Row not found"
+        console.error('Error checking song:', fetchError);
+        continue;
+      }
+
       if (!existing) {
         const title = path.basename(file, ext); // Use filename as title
         const artist = 'Unknown Artist';
         const cover = "https://images.unsplash.com/photo-1459749411177-d4a37196040e?auto=format&fit=crop&q=80&w=400&h=400";
         
-        await db.run(
-          'INSERT INTO songs (title, artist, cover, url) VALUES (?, ?, ?, ?)',
-          title,
-          artist,
-          cover,
-          file
-        );
-        console.log(`Added: ${file}`);
-        addedCount++;
+        const { error: insertError } = await supabase
+          .from('songs')
+          .insert([{
+            title,
+            artist,
+            cover,
+            url: file
+          }]);
+
+        if (insertError) {
+           console.error(`Failed to add ${file}:`, insertError.message);
+        } else {
+           console.log(`Added: ${file}`);
+           addedCount++;
+        }
       } else {
         skippedCount++;
       }

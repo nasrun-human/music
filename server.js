@@ -1,8 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -10,9 +8,15 @@ import http from 'http';
 import { Server } from 'socket.io';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Supabase Setup
+const supabaseUrl = 'https://vfsqbtxvosdbncolnbko.supabase.co';
+const supabaseKey = 'sb_publishable_mMWZNi6FrjyRMwxrewiC4Q_5KCEEdqf'; // WARNING: Check if this key works. If not, get the 'anon' public key starting with 'ey...'
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
 const server = http.createServer(app);
@@ -50,94 +54,7 @@ if (isProduction) {
   app.use(express.static(path.join(__dirname, 'dist')));
 }
 
-// Database setup
-let db;
-(async () => {
-  db = await open({
-    filename: path.join(__dirname, 'database.sqlite'),
-    driver: sqlite3.Database
-  });
 
-  // Songs Table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS songs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      artist TEXT NOT NULL,
-      cover TEXT,
-      url TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Users Table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'user',
-      avatar TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Messages Table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sender_id INTEGER NOT NULL,
-      receiver_id INTEGER,
-      content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(sender_id) REFERENCES users(id)
-    )
-  `);
-
-  // Seed initial admin user
-  const adminExists = await db.get('SELECT * FROM users WHERE username = ?', 'admin');
-  if (!adminExists) {
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    await db.run(
-      'INSERT INTO users (username, password, role, avatar) VALUES (?, ?, ?, ?)',
-      'admin', hashedPassword, 'admin', 'https://ui-avatars.com/api/?name=Admin'
-    );
-    console.log('Created admin user: admin / admin123');
-  }
-
-  // Seed data if empty
-  const count = await db.get('SELECT COUNT(*) as count FROM songs');
-  if (count.count === 0) {
-    const seedSongs = [
-      {
-        title: "Melody of Nature",
-        artist: "Nature Sounds",
-        cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=400&h=400",
-        url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-      },
-      {
-        title: "Urban Rhythm",
-        artist: "City Vibes",
-        cover: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=400&h=400",
-        url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
-      },
-      {
-        title: "Deep Focus",
-        artist: "Concentration",
-        cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&q=80&w=400&h=400",
-        url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
-      }
-    ];
-
-    for (const song of seedSongs) {
-      await db.run(
-        'INSERT INTO songs (title, artist, cover, url) VALUES (?, ?, ?, ?)',
-        song.title, song.artist, song.cover, song.url
-      );
-    }
-    console.log('Seeded initial songs');
-  }
-})();
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
@@ -192,12 +109,17 @@ app.post('/api/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const avatar = `https://ui-avatars.com/api/?name=${username}`;
-    const result = await db.run(
-      'INSERT INTO users (username, password, avatar) VALUES (?, ?, ?)',
-      username, hashedPassword, avatar
-    );
-    res.json({ message: 'User registered successfully', userId: result.lastID });
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert([{ username, password: hashedPassword, avatar, role: 'user' }])
+      .select();
+
+    if (error) throw error;
+
+    res.json({ message: 'User registered successfully', userId: data[0].id });
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: 'Username already exists or error creating user' });
   }
 });
@@ -205,8 +127,13 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const user = await db.get('SELECT * FROM users WHERE username = ?', username);
-    if (!user) return res.status(400).json({ error: 'User not found' });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single();
+
+    if (error || !user) return res.status(400).json({ error: 'User not found' });
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
@@ -220,7 +147,13 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
-    const user = await db.get('SELECT id, username, role, avatar FROM users WHERE id = ?', req.user.id);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, role, avatar')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error) throw error;
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -230,7 +163,11 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 // User Management (Admin only usually, but open for demo list)
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const users = await db.all('SELECT id, username, role, avatar FROM users');
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, username, role, avatar');
+
+    if (error) throw error;
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -240,7 +177,13 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 // Songs Routes
 app.get('/api/songs', async (req, res) => {
   try {
-    const songs = await db.all('SELECT * FROM songs ORDER BY created_at DESC');
+    const { data: songs, error } = await supabase
+      .from('songs')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
     const songsWithFullUrl = songs.map(song => ({
       ...song,
       url: song.url.startsWith('http') ? song.url : `/uploads/${song.url}`
@@ -273,19 +216,22 @@ app.post('/api/songs', authenticateToken, (req, res, next) => {
     const filename = req.file.filename;
     const cover = "https://images.unsplash.com/photo-1459749411177-d4a37196040e?auto=format&fit=crop&q=80&w=400&h=400";
 
-    const result = await db.run(
-      'INSERT INTO songs (title, artist, cover, url) VALUES (?, ?, ?, ?)',
-      title || req.file.originalname.replace(/\.[^/.]+$/, ""),
-      artist || 'Unknown Artist',
-      cover,
-      filename
-    );
+    const { data, error } = await supabase
+      .from('songs')
+      .insert([{
+        title: title || req.file.originalname.replace(/\.[^/.]+$/, ""),
+        artist: artist || 'Unknown Artist',
+        cover,
+        url: filename
+      }])
+      .select()
+      .single();
 
-    const newSong = await db.get('SELECT * FROM songs WHERE id = ?', result.lastID);
+    if (error) throw error;
 
     res.json({
-      ...newSong,
-      url: `/uploads/${newSong.url}`
+      ...data,
+      url: `/uploads/${data.url}`
     });
 
   } catch (error) {
@@ -296,13 +242,27 @@ app.post('/api/songs', authenticateToken, (req, res, next) => {
 // Messages Routes (History)
 app.get('/api/messages', authenticateToken, async (req, res) => {
   try {
-    const messages = await db.all(`
-      SELECT m.*, u.username, u.avatar 
-      FROM messages m 
-      JOIN users u ON m.sender_id = u.id 
-      ORDER BY m.created_at ASC LIMIT 50
-    `);
-    res.json(messages);
+    // Join not directly supported in simple select without definition, but we can fetch and map or use view
+    // Supabase supports foreign key joins
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        users:sender_id (username, avatar)
+      `)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    // Transform to match previous format if needed, or update frontend
+    // Previous format: m.*, u.username, u.avatar
+    const formattedMessages = messages.map(msg => ({
+      ...msg,
+      username: msg.users?.username,
+      avatar: msg.users?.avatar
+    }));
+
+    res.json(formattedMessages);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -314,19 +274,23 @@ io.on('connection', (socket) => {
 
   socket.on('join_chat', (userData) => {
     socket.userData = userData; // Store user info in socket
-    io.emit('system_message', { content: `${userData.username} joined the chat` });
+    // io.emit('system_message', { content: `${userData.username} joined the chat` });
   });
 
   socket.on('send_message', async (data) => {
     // data: { sender_id, content, username, avatar }
     try {
       // Save to DB
-      await db.run(
-        'INSERT INTO messages (sender_id, content) VALUES (?, ?)',
-        data.sender_id, data.content
-      );
-      // Broadcast to all
-      io.emit('receive_message', data);
+      const { error } = await supabase
+        .from('messages')
+        .insert([{ sender_id: data.sender_id, content: data.content }]);
+
+      if (error) {
+        console.error('Error saving message:', error);
+      } else {
+        // Broadcast to all
+        io.emit('receive_message', data);
+      }
     } catch (err) {
       console.error('Error saving message:', err);
     }
