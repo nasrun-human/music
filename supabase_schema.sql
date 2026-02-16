@@ -42,3 +42,25 @@ create table public.messages (
 -- create policy "Anyone can insert users" on public.users for insert with check (true);
 -- create policy "Anyone can insert songs" on public.songs for insert with check (true);
 -- create policy "Anyone can insert messages" on public.messages for insert with check (true);
+
+-- STORAGE SETUP
+-- You must run these commands in the Supabase SQL Editor to enable file uploads.
+
+-- 1. Create a public bucket named 'songs'
+insert into storage.buckets (id, name, public) 
+values ('songs', 'songs', true);
+
+-- 2. Allow public access to view files in 'songs' bucket
+create policy "Public Access" 
+on storage.objects for select 
+using ( bucket_id = 'songs' );
+
+-- 3. Allow authenticated users to upload files to 'songs' bucket
+-- Note: In this simple app, we are doing backend uploads, so we actually use the Service Role or Anon key with policies.
+-- If using anon key from backend without user context, we might need to allow public inserts or use service key.
+-- Since we use supabase-js in Node.js with the anon key, RLS policies apply.
+-- Let's allow anyone to insert for simplicity of this demo, or restricted to authenticated if we passed user token (we don't pass user token to supabase client in server.js yet, we use global client).
+-- So we should allow public inserts for now (or fix server to use service role key).
+create policy "Public Upload" 
+on storage.objects for insert 
+with check ( bucket_id = 'songs' );

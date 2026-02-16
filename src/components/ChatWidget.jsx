@@ -19,7 +19,7 @@ const ChatWidget = () => {
       socketRef.current.emit('join_chat', { username: user.username, id: user.id });
 
       // Load initial messages (optional, if we added an API for it)
-      fetch('http://localhost:3000/api/messages', {
+      fetch('/api/messages', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       })
         .then(res => res.json())

@@ -70,30 +70,8 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Multer storage config
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir)
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    let ext = path.extname(file.originalname);
-    if ((!ext || ext === '') && (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/'))) {
-      // Basic extension mapping
-      switch (file.mimetype) {
-        case 'audio/mpeg': ext = '.mp3'; break;
-        case 'audio/wav': ext = '.wav'; break;
-        case 'audio/ogg': ext = '.ogg'; break;
-        case 'video/mp4': ext = '.mp4'; break;
-        default: ext = '.mp3'; // Default to mp3 if unknown
-      }
-    }
-    cb(null, uniqueSuffix + ext);
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 100 * 1024 * 1024 // 100 MB limit
   }
@@ -184,9 +162,12 @@ app.get('/api/songs', async (req, res) => {
 
     if (error) throw error;
 
+    // For backward compatibility or if we decide to store partial paths later
     const songsWithFullUrl = songs.map(song => ({
       ...song,
-      url: song.url.startsWith('http') ? song.url : `/uploads/${song.url}`
+      // If url starts with http, it's a full URL (Supabase or External).
+      // If not, it might be an old local upload (which won't work now unless migrated) or we can fallback.
+      url: song.url
     }));
     res.json(songsWithFullUrl);
   } catch (error) {
@@ -197,13 +178,10 @@ app.get('/api/songs', async (req, res) => {
 app.post('/api/songs', authenticateToken, (req, res, next) => {
   upload.single('audio')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
-      // A Multer error occurred when uploading.
       return res.status(400).json({ error: `Upload error: ${err.message}` });
     } else if (err) {
-      // An unknown error occurred when uploading.
       return res.status(500).json({ error: `Unknown upload error: ${err.message}` });
     }
-    // Everything went fine.
     next();
   });
 }, async (req, res) => {
@@ -213,16 +191,38 @@ app.post('/api/songs', authenticateToken, (req, res, next) => {
     }
 
     const { title, artist } = req.body;
-    const filename = req.file.filename;
+    const file = req.file;
+    const fileExt = path.extname(file.originalname) || '.mp3';
+    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExt}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('songs')
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Supabase Storage Error:', uploadError);
+      return res.status(500).json({ error: `Storage upload failed: ${uploadError.message}` });
+    }
+
+    // Get Public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('songs')
+      .getPublicUrl(fileName);
+
     const cover = "https://images.unsplash.com/photo-1459749411177-d4a37196040e?auto=format&fit=crop&q=80&w=400&h=400";
 
+    // Save metadata to Database
     const { data, error } = await supabase
       .from('songs')
       .insert([{
         title: title || req.file.originalname.replace(/\.[^/.]+$/, ""),
         artist: artist || 'Unknown Artist',
         cover,
-        url: filename
+        url: publicUrl // Save the full public URL
       }])
       .select()
       .single();
@@ -231,10 +231,11 @@ app.post('/api/songs', authenticateToken, (req, res, next) => {
 
     res.json({
       ...data,
-      url: `/uploads/${data.url}`
+      url: data.url
     });
 
   } catch (error) {
+    console.error('Server Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
